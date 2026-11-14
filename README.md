@@ -12,7 +12,7 @@ It is plain HTML, CSS and JavaScript, with no build step and no runtime dependen
 | 🔤 **ABC Adventure** | 4–6 | Letters, phonics | A big letter appears. Find the picture that starts with it. Early rounds show uppercase letters with labels; later rounds show lowercase letters and hide the labels, so kids have to listen for the sound. |
 | 🐝 **Spelling Bee Garden** | 5–9 | Spelling, phonics | See a picture, hear the word, and tap letter tiles in order. 3 levels: Sprout (3 letters, with faint letters to trace), Bloom (4–5 letters), Sunflower (6+ letters, with decoy tiles). There's also a 💡 hint button. |
 | 🚀 **Math Rocket** | 6–10 | +, −, ×, ÷ | 10-question missions on a big keypad (the keyboard works too). 6 levels: from adding within 10 with dot pictures, up to three-digit numbers and missing-number puzzles. 2 tries per question, then the answer is explained. |
-| 🎨 **Color Studio** | 2–10 | Colors, creativity, fine motor | 8 coloring pages: kitty, fish, house, butterfly, rocket, flowers, ice cream and dino. **Fill** mode: pick a color and tap an area (toddler friendly). **Crayon** mode: draw freehand in 3 sizes. Picking a color says its name. Undo also restores a cleared page. Each picture is saved automatically, and **Save** exports a PNG (share sheet on phones/tablets so it can go to Photos; download on computers). **Done** celebrates, with a ⭐ the first time a picture is mostly colored. |
+| 🎨 **Color Studio** | 2–10 | Colors, creativity, fine motor | 17 coloring pages in 3 sections. **Animals & Fun**: kitty, fish, house, butterfly, rocket, flowers, ice cream and dino. **Christmas: Jesus Is Born**: Baby Jesus in the manger, the Star of Bethlehem ("Jesus is born"), an angel ("Glory to God"), gifts for Jesus, and an Advent wreath ("Jesus is the light"). **Thanksgiving**: turkey, pumpkin patch, "Give thanks" with pumpkin pie, and a cornucopia. The current holiday's section is shown first (Thanksgiving in November, Christmas in December). Big outlined words can be colored in too. **Fill** mode: pick a color and tap an area (toddler friendly). **Crayon** mode: draw freehand in 3 sizes. Picking a color says its name. Undo also restores a cleared page. Each picture is saved automatically, and **Save** exports a PNG (share sheet on phones/tablets so it can go to Photos; download on computers). **Done** celebrates, with a ⭐ the first time a picture is mostly colored. |
 
 ### Built for little kids
 - **Reads aloud**: every prompt is spoken (Web Speech API), so pre-readers can play on their own. 🔊 repeats it.
@@ -111,11 +111,11 @@ package.json                npm run dev / deploy / bump / check
 
 ## Adding a coloring page
 
-Append an entry to `PAGES` in `public/js/games/coloring-pages.js`, then run `npm run bump`. Pages use a 400×400 canvas:
+Append an entry to `PAGES` in `public/js/games/coloring-pages.js`, then run `npm run bump`. Pages use a 400×400 canvas. Set `category` to `'everyday'`, `'christmas'` or `'thanksgiving'` (sections are listed in `CATEGORIES` in the same file):
 
 ```js
 {
-  id: 'turtle', title: 'Turtle', emoji: '🐢',
+  id: 'turtle', category: 'everyday', title: 'Turtle', emoji: '🐢',
   // Fillable shapes, back to front. Start with the full background.
   regions: `<rect x="0" y="0" width="400" height="400"/>
             <ellipse cx="200" cy="230" rx="120" ry="80"/>
@@ -126,6 +126,7 @@ Append an entry to `PAGES` in `public/js/games/coloring-pages.js`, then run `npm
 ```
 
 Shapes may overlap: each outline is automatically hidden wherever a later shape covers it.
+Helpers in that file: `words('GIVE THANKS', y, size)` adds big outlined letters to color in; `star()`, `leaf()`, `pumpkin()`, `flame()`, `petals()` and `fan()` draw common shapes.
 
 ## Adding a game
 

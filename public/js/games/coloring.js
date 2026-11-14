@@ -20,6 +20,7 @@
   const INK = '#2d2a4a';
   const BLANK = '#ffffff';
   const STORAGE_PREFIX = 'little-learners:coloring:';
+  const FILLABLE = 'circle,ellipse,rect,polygon,path,text'; // <text> = bubble letters
 
   const PALETTE = [
     { name: 'red', hex: '#ef4444' },
@@ -72,7 +73,7 @@
 
     const regionsLayer = svg.querySelector('.regions');
     const outlinesLayer = svg.querySelector('.outlines');
-    const regions = [...regionsLayer.querySelectorAll('circle,ellipse,rect,polygon,path')];
+    const regions = [...regionsLayer.querySelectorAll(FILLABLE)];
 
     // Outlines sit above the crayon layer, so each one is masked by every
     // shape drawn after it: only the edges you'd actually see get ink.
@@ -85,7 +86,7 @@
       return list.join(' ');
     };
     const copy = (shape, fill) => {
-      const c = shape.cloneNode(false);
+      const c = shape.cloneNode(true); // deep: keeps the letters of <text>
       c.setAttribute('fill', fill);
       const t = transformOf(shape);
       if (!t) return c;
@@ -170,12 +171,36 @@
   /* Export as PNG                                                       */
   /* ------------------------------------------------------------------ */
 
+  /** The app font as a data: URL, so lettering looks right in saved pictures. */
+  let fontDataUrl = null;
+  async function getFontDataUrl() {
+    if (fontDataUrl) return fontDataUrl;
+    const blob = await (await fetch('fonts/fredoka-latin.woff2')).blob();
+    fontDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return fontDataUrl;
+  }
+
   async function exportPicture(page, svg) {
     const SIZE = 1200;
     const clone = svg.cloneNode(true);
     clone.setAttribute('xmlns', NS);
     clone.setAttribute('width', SIZE);
     clone.setAttribute('height', SIZE);
+    // A picture rendered as an image can't see the page's fonts: embed ours.
+    if (clone.querySelector('text')) {
+      try {
+        const style = document.createElementNS(NS, 'style');
+        style.textContent = `@font-face{font-family:'Fredoka';src:url(${await getFontDataUrl()}) format('woff2');font-weight:300 700;}`;
+        clone.prepend(style);
+      } catch (e) {
+        /* fall back to a system font */
+      }
+    }
     const svgUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' }));
     try {
       const img = new Image();
@@ -217,6 +242,18 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Gallery sections — the current holiday goes first                   */
+  /* ------------------------------------------------------------------ */
+
+  function orderedCategories(date) {
+    const cats = EG.coloringCategories || [{ id: 'everyday', title: 'Pictures', emoji: '🖍️' }];
+    const month = date.getMonth(); // 0 = January
+    const lead = month === 10 ? ['thanksgiving', 'christmas'] : month === 11 ? ['christmas'] : [];
+    const rank = (c) => (lead.includes(c.id) ? lead.indexOf(c.id) : lead.length + cats.indexOf(c));
+    return cats.slice().sort((a, b) => rank(a) - rank(b));
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Game                                                                */
   /* ------------------------------------------------------------------ */
 
@@ -236,38 +273,47 @@
     document.addEventListener('keydown', onKey);
     api.onCleanup(() => document.removeEventListener('keydown', onKey));
 
+    /** A gallery button showing the picture with its saved colors. */
+    function thumb(page, i) {
+      const built = buildPage(page);
+      applyState(built, loadState(page, built));
+      return el(
+        'button',
+        {
+          class: 'cs-thumb pop-in',
+          style: { animationDelay: i * 50 + 'ms' },
+          'aria-label': page.title,
+          onclick: () => {
+            api.sfx.tap();
+            openPage(page);
+          },
+        },
+        built.svg,
+        el('span', { class: 'cs-thumb-label' }, el('span', { 'aria-hidden': 'true' }, page.emoji), ' ', page.title),
+        doneMap()[page.id] ? el('span', { class: 'cs-done', title: 'Finished!' }, '⭐') : null
+      );
+    }
+
     function showGallery() {
       currentUndo = null;
       delete api.memory.pageId;
       api.prompt('Pick a picture to color!');
+      let n = 0;
       api.stage.replaceChildren(
         el(
           'div',
           { class: 'cs-gallery' },
           el('h2', { class: 'level-title' }, 'Pick a picture to color'),
-          el(
-            'div',
-            { class: 'cs-grid' },
-            pages.map((page, i) => {
-              const built = buildPage(page);
-              applyState(built, loadState(page, built));
-              return el(
-                'button',
-                {
-                  class: 'cs-thumb pop-in',
-                  style: { animationDelay: i * 50 + 'ms' },
-                  'aria-label': page.title,
-                  onclick: () => {
-                    api.sfx.tap();
-                    openPage(page);
-                  },
-                },
-                built.svg,
-                el('span', { class: 'cs-thumb-label' }, el('span', { 'aria-hidden': 'true' }, page.emoji), ' ', page.title),
-                doneMap()[page.id] ? el('span', { class: 'cs-done', title: 'Finished!' }, '⭐') : null
-              );
-            })
-          )
+          orderedCategories(new Date()).map((cat) => {
+            const inCat = pages.filter((p) => (p.category || 'everyday') === cat.id);
+            if (!inCat.length) return null;
+            return el(
+              'section',
+              { class: 'cs-section', 'aria-label': cat.title },
+              el('h3', { class: 'cs-section-title' }, el('span', { 'aria-hidden': 'true' }, cat.emoji), ' ', cat.title),
+              el('div', { class: 'cs-grid' }, inCat.map((page) => thumb(page, n++)))
+            );
+          })
         )
       );
     }
@@ -534,7 +580,7 @@
     emoji: '🎨',
     color: '#ec4899',
     ages: [2, 10],
-    description: 'Tap to fill or draw with crayons. Color kitties, rockets, dinos and more, then save your art!',
+    description: 'Tap to fill or draw with crayons. Animals, Christmas Nativity and Thanksgiving pictures, then save your art!',
     skills: ['Colors', 'Creativity', 'Fine motor'],
     mount,
   });

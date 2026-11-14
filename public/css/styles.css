@@ -576,6 +576,16 @@ a { color: inherit; text-decoration: none; }
 /* ---------------------------------------------------------------- */
 
 .cs-gallery { width: 100%; text-align: center; }
+.cs-section { margin-bottom: 26px; }
+.cs-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: clamp(1.2rem, 4.5vw, 1.5rem);
+  text-align: left;
+}
+.cs-section-title span { font-size: 1.5em; }
 .cs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(45%, 180px), 1fr));

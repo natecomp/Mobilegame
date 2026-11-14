@@ -8,6 +8,9 @@
  *             (eyes, whiskers, ...). Shapes here are outlines unless they
  *             set their own fill.
  *
+ * Optional fields: category ('everyday' | 'christmas' | 'thanksgiving'),
+ * and words(...) for big outlined letters children can color in.
+ *
  * To add a page, append to PAGES. No other code changes are needed.
  */
 (function () {
@@ -33,7 +36,64 @@
     return out;
   }
 
+
+  /** Big outlined letters children can fill in (a fillable <text> region). */
+  function words(text, y, size, x = 200) {
+    return (
+      `<text x="${x}" y="${y}" font-size="${size}" font-family="Fredoka, sans-serif" font-weight="700" ` +
+      `text-anchor="middle" letter-spacing="2" stroke-width="3">${text}</text>`
+    );
+  }
+
+  /** A candle flame (teardrop) sitting on top of a candle at (cx, top). */
+  function flame(cx, top) {
+    return `<path d="M${cx} ${top - 34} Q${cx + 15} ${top - 12} ${cx} ${top - 2} Q${cx - 15} ${top - 12} ${cx} ${top - 34} Z"/>`;
+  }
+
+  /** Feathers fanned out behind a turkey, centred on (cx, cy). */
+  function fan(cx, cy, angles, dist, rx, ry) {
+    return angles
+      .map((a) => `<ellipse cx="${cx}" cy="${cy - dist}" rx="${rx}" ry="${ry}" transform="rotate(${a} ${cx} ${cy})"/>`)
+      .join('');
+  }
+
+  /** A pumpkin made of three overlapping lobes, with a stem. */
+  function pumpkin(cx, cy, w, h) {
+    const side = w * 0.32;
+    return (
+      `<path d="M${cx - w * 0.06} ${cy - h * 0.42} L${cx - w * 0.04} ${cy - h * 0.62} L${cx + w * 0.07} ${cy - h * 0.62} L${cx + w * 0.06} ${cy - h * 0.4} Z"/>` +
+      `<ellipse cx="${cx - side}" cy="${cy}" rx="${w * 0.3}" ry="${h * 0.45}"/>` +
+      `<ellipse cx="${cx + side}" cy="${cy}" rx="${w * 0.3}" ry="${h * 0.45}"/>` +
+      `<ellipse cx="${cx}" cy="${cy}" rx="${w * 0.27}" ry="${h * 0.5}"/>`
+    );
+  }
+
+  // Maple leaf outline in a ±50 box (stem included), pointing up.
+  const MAPLE = [
+    [0, -50], [8, -30], [20, -36], [16, -14], [36, -22], [30, -8], [46, -2], [24, 10], [28, 22], [6, 16],
+    [4, 44], [-4, 44], [-6, 16], [-28, 22], [-24, 10], [-46, -2], [-30, -8], [-36, -22], [-16, -14], [-20, -36], [-8, -30],
+  ];
+
+  /** An autumn maple leaf of radius r, rotated by rot degrees. */
+  function leaf(cx, cy, r, rot = 0) {
+    const a = (rot * Math.PI) / 180;
+    const k = r / 50;
+    const pts = MAPLE.map(([x, y]) => {
+      const px = cx + k * (x * Math.cos(a) - y * Math.sin(a));
+      const py = cy + k * (x * Math.sin(a) + y * Math.cos(a));
+      return `${px.toFixed(1)},${py.toFixed(1)}`;
+    });
+    return `<polygon points="${pts.join(' ')}"/>`;
+  }
+
   const BG = '<rect x="0" y="0" width="400" height="400"/>';
+
+  // Gallery sections. The current holiday is shown first (see coloring.js).
+  const CATEGORIES = [
+    { id: 'everyday', title: 'Animals & Fun', emoji: '🐾' },
+    { id: 'christmas', title: 'Christmas: Jesus Is Born', emoji: '⭐' },
+    { id: 'thanksgiving', title: 'Thanksgiving', emoji: '🦃' },
+  ];
 
   const PAGES = [
     {
@@ -230,7 +290,234 @@
         <path d="M308 152 Q320 160 330 150"/>
         <circle cx="328" cy="134" r="2.5" fill="#2d2a4a"/>`,
     },
+
+    /* ------------------------------- Christmas ------------------------------- */
+    {
+      id: 'manger',
+      category: 'christmas',
+      title: 'Baby Jesus',
+      emoji: '👶',
+      regions: `${BG}
+        <path d="M0 330 Q200 315 400 330 V400 H0 Z"/>
+        <rect x="70" y="170" width="260" height="165"/>
+        <polygon points="40,182 200,82 360,182"/>
+        ${star(200, 42, 30, 13)}
+        <path d="M92 338 Q108 300 140 312 Q170 290 200 305 Q230 288 260 312 Q292 300 308 338 Z"/>
+        <polygon points="128,342 148,288 160,288 140,342"/>
+        <polygon points="272,342 252,288 240,288 260,342"/>
+        <polygon points="118,250 282,250 262,300 138,300"/>
+        <circle cx="140" cy="232" r="27"/>
+        <ellipse cx="205" cy="240" rx="62" ry="22"/>
+        <circle cx="140" cy="236" r="18"/>`,
+      lines: `
+        <path d="M156 42 H140 M244 42 H260 M176 14 L166 4 M224 14 L234 4"/>
+        <path d="M188 220 Q181 240 188 260 M222 219 Q215 240 222 261"/>
+        <path d="M131 234 q3 3 6 0 M143 234 q3 3 6 0 M135 242 q5 4 10 0"/>
+        <path d="M118 326 l10 -12 M176 316 l6 -12 M236 316 l-4 -13 M282 326 l-9 -11"/>`,
+    },
+    {
+      id: 'bethlehem',
+      category: 'christmas',
+      title: 'Star of Bethlehem',
+      emoji: '🌟',
+      regions: `${BG}
+        <polygon points="200,14 216,72 274,88 216,104 200,170 184,104 126,88 184,72"/>
+        ${star(56, 58, 13)}
+        ${star(342, 48, 15)}
+        ${star(330, 150, 9)}
+        ${star(78, 160, 9)}
+        <path d="M0 262 Q100 214 200 250 T400 240 V400 H0 Z"/>
+        <rect x="66" y="236" width="62" height="70"/>
+        <path d="M66 236 Q97 200 128 236 Z"/>
+        <rect x="150" y="256" width="48" height="50"/>
+        <rect x="216" y="222" width="58" height="84"/>
+        <rect x="290" y="244" width="62" height="62"/>
+        <path d="M290 244 Q321 212 352 244 Z"/>
+        <path d="M0 300 Q200 282 400 300 V400 H0 Z"/>
+        ${words('JESUS IS BORN', 366, 42)}`,
+      lines: `
+        <path d="M168 56 L150 38 M232 56 L250 38 M168 120 L150 138 M232 120 L250 138"/>
+        <path d="M90 306 V280 Q97 270 104 280 V306 M166 270 h16 v14 h-16 Z M232 240 h12 v12 h-12 Z M252 240 h12 v12 h-12 Z M236 306 V282 h18 v24 M306 262 h12 v12 h-12 Z"/>`,
+    },
+    {
+      id: 'angel',
+      category: 'christmas',
+      title: 'Christmas Angel',
+      emoji: '😇',
+      regions: `${BG}
+        ${star(58, 58, 14)}
+        ${star(342, 70, 12)}
+        ${star(66, 210, 9)}
+        ${star(336, 216, 10)}
+        <path d="M178 156 Q92 100 68 172 Q80 236 180 210 Z"/>
+        <path d="M222 156 Q308 100 332 172 Q320 236 220 210 Z"/>
+        <circle cx="200" cy="110" r="35"/>
+        <path d="M200 138 L136 306 Q200 322 264 306 Z"/>
+        <polygon points="196,162 156,232 198,226"/>
+        <polygon points="204,162 244,232 202,226"/>
+        <circle cx="200" cy="224" r="14"/>
+        <circle cx="200" cy="118" r="28"/>
+        <ellipse cx="200" cy="68" rx="34" ry="9"/>
+        ${words('GLORY TO GOD', 370, 40)}`,
+      lines: `
+        <path d="M187 116 q4 3 8 0 M205 116 q4 3 8 0 M193 128 q7 6 14 0"/>
+        <path d="M200 240 V312"/>`,
+    },
+    {
+      id: 'gifts',
+      category: 'christmas',
+      title: 'Gifts for Jesus',
+      emoji: '🎁',
+      regions: `${BG}
+        ${star(200, 58, 34)}
+        <rect x="0" y="330" width="400" height="70"/>
+        <rect x="40" y="250" width="100" height="80"/>
+        <path d="M40 250 Q90 204 140 250 Z"/>
+        <rect x="82" y="262" width="16" height="22" rx="3"/>
+        <rect x="182" y="226" width="36" height="28"/>
+        <path d="M170 330 L160 262 Q200 242 240 262 L230 330 Z"/>
+        <ellipse cx="200" cy="226" rx="24" ry="8"/>
+        <circle cx="200" cy="213" r="8"/>
+        <rect x="265" y="265" width="90" height="65"/>
+        <rect x="302" y="265" width="16" height="65"/>
+        <ellipse cx="294" cy="252" rx="18" ry="11" transform="rotate(-20 294 252)"/>
+        <ellipse cx="326" cy="252" rx="18" ry="11" transform="rotate(20 326 252)"/>
+        <circle cx="310" cy="256" r="8"/>
+        ${words('GIFTS FOR JESUS', 376, 34)}`,
+      lines: `
+        <path d="M156 58 H138 M244 58 H262 M200 102 V118"/>
+        <path d="M40 300 H140 M164 290 H236"/>
+        <circle cx="90" cy="271" r="3" fill="#2d2a4a"/>`,
+    },
+    {
+      id: 'advent',
+      category: 'christmas',
+      title: 'Advent Wreath',
+      emoji: '🕯️',
+      regions: `${BG}
+        <rect x="0" y="360" width="400" height="40"/>
+        <rect x="186" y="150" width="28" height="140"/>
+        <rect x="147" y="180" width="26" height="86"/>
+        <rect x="227" y="180" width="26" height="86"/>
+        <path fill-rule="evenodd" d="M50 300 a150 55 0 1 0 300 0 a150 55 0 1 0 -300 0 Z M105 300 a95 28 0 1 0 190 0 a95 28 0 1 0 -190 0 Z"/>
+        <ellipse cx="128" cy="258" rx="22" ry="10" transform="rotate(12 128 258)"/>
+        <ellipse cx="272" cy="258" rx="22" ry="10" transform="rotate(-12 272 258)"/>
+        <ellipse cx="150" cy="346" rx="24" ry="10" transform="rotate(-8 150 346)"/>
+        <ellipse cx="200" cy="352" rx="24" ry="10"/>
+        <ellipse cx="250" cy="346" rx="24" ry="10" transform="rotate(8 250 346)"/>
+        <ellipse cx="70" cy="322" rx="22" ry="10" transform="rotate(-40 70 322)"/>
+        <ellipse cx="330" cy="322" rx="22" ry="10" transform="rotate(40 330 322)"/>
+        <circle cx="175" cy="352" r="7"/>
+        <circle cx="225" cy="352" r="7"/>
+        <circle cx="108" cy="340" r="7"/>
+        <circle cx="292" cy="340" r="7"/>
+        <rect x="82" y="208" width="26" height="98"/>
+        <rect x="292" y="208" width="26" height="98"/>
+        ${flame(200, 150)}
+        ${flame(160, 180)}
+        ${flame(240, 180)}
+        ${flame(95, 208)}
+        ${flame(305, 208)}
+        ${words('JESUS IS THE LIGHT', 56, 30)}`,
+      lines: '',
+    },
+
+    /* ----------------------------- Thanksgiving ----------------------------- */
+    {
+      id: 'turkey',
+      category: 'thanksgiving',
+      title: 'Thankful Turkey',
+      emoji: '🦃',
+      regions: `${BG}
+        <path d="M0 332 Q200 314 400 332 V400 H0 Z"/>
+        ${fan(200, 236, [-75, -50, -25, 0, 25, 50, 75], 92, 28, 66)}
+        <ellipse cx="200" cy="248" rx="64" ry="60"/>
+        <path d="M150 238 Q130 282 176 294 Q166 262 150 238 Z"/>
+        <path d="M250 238 Q270 282 224 294 Q234 262 250 238 Z"/>
+        <circle cx="200" cy="172" r="32"/>
+        <polygon points="192,176 208,176 200,192"/>
+        <path d="M206 184 Q216 202 205 210 Q198 200 203 188 Z"/>
+        ${leaf(54, 356, 22, 15)}
+        ${leaf(350, 362, 20, -20)}
+        ${leaf(310, 370, 14, 40)}`,
+      lines: `
+        <circle cx="188" cy="164" r="5" fill="#2d2a4a"/>
+        <circle cx="212" cy="164" r="5" fill="#2d2a4a"/>
+        <path d="M186 306 V334 M174 342 L186 334 L186 344 M198 342 L186 334"/>
+        <path d="M214 306 V334 M202 342 L214 334 L214 344 M226 342 L214 334"/>`,
+    },
+    {
+      id: 'pumpkins',
+      category: 'thanksgiving',
+      title: 'Pumpkin Patch',
+      emoji: '🎃',
+      regions: `${BG}
+        <circle cx="336" cy="66" r="34"/>
+        <path d="M60 112 Q36 112 42 90 Q48 70 70 75 Q78 50 106 55 Q130 42 144 66 Q166 66 163 90 Q162 112 138 112 Z"/>
+        <path d="M0 262 Q200 240 400 262 V400 H0 Z"/>
+        <ellipse cx="62" cy="292" rx="18" ry="46" transform="rotate(-12 62 292)"/>
+        <path d="M68 342 Q22 318 30 256 Q52 298 68 342 Z"/>
+        <path d="M68 342 Q108 320 100 258 Q82 300 68 342 Z"/>
+        ${pumpkin(200, 300, 170, 120)}
+        <path d="M212 238 Q244 206 268 226 Q244 252 212 238 Z"/>
+        ${pumpkin(326, 340, 90, 66)}`,
+      lines: `
+        <path d="M262 236 q18 4 14 18 q-4 12 10 14"/>
+        <path d="M55 262 l8 6 M52 282 l8 6 M54 302 l8 6 M58 322 l7 5"/>`,
+    },
+    {
+      id: 'givethanks',
+      category: 'thanksgiving',
+      title: 'Give Thanks',
+      emoji: '🥧',
+      regions: `${BG}
+        <polygon points="72,82 20,82 38,110 20,138 72,138"/>
+        <polygon points="328,82 380,82 362,110 380,138 328,138"/>
+        <rect x="58" y="66" width="284" height="64" rx="6"/>
+        ${words('GIVE THANKS', 114, 40)}
+        ${leaf(58, 228, 30, 10)}
+        ${leaf(344, 220, 26, -15)}
+        <path d="M88 300 L110 342 H290 L312 300 Z"/>
+        <ellipse cx="200" cy="300" rx="114" ry="32"/>
+        <ellipse cx="200" cy="296" rx="92" ry="21"/>
+        <path d="M178 292 Q172 272 190 270 Q200 252 212 270 Q230 272 222 292 Z"/>
+        <path d="M60 350 Q80 328 100 350 Z"/>
+        <ellipse cx="80" cy="366" rx="16" ry="19"/>
+        <path d="M300 350 Q320 328 340 350 Z"/>
+        <ellipse cx="320" cy="366" rx="16" ry="19"/>`,
+      lines: `
+        <path d="M80 330 v-8 M320 330 v-8"/>
+        <path d="M126 336 L116 310 M160 340 L154 314 M200 342 V316 M240 340 L246 314 M274 336 L284 310"/>`,
+    },
+    {
+      id: 'cornucopia',
+      category: 'thanksgiving',
+      title: 'Cornucopia',
+      emoji: '🍇',
+      regions: `${BG}
+        <rect x="0" y="330" width="400" height="70"/>
+        <path d="M250 158 C170 158 110 190 72 232 C58 248 40 236 46 214 C36 234 50 260 78 252 C122 266 182 302 250 302 Z"/>
+        <ellipse cx="250" cy="230" rx="32" ry="72"/>
+        <circle cx="300" cy="212" r="13"/>
+        <circle cx="322" cy="212" r="13"/>
+        <circle cx="311" cy="232" r="13"/>
+        <circle cx="290" cy="234" r="13"/>
+        <circle cx="332" cy="234" r="13"/>
+        <circle cx="300" cy="254" r="13"/>
+        <circle cx="322" cy="254" r="13"/>
+        <circle cx="270" cy="168" r="28"/>
+        <path d="M272 140 Q290 122 304 134 Q290 148 272 140 Z"/>
+        <path d="M352 258 Q378 262 376 300 Q372 330 348 330 Q322 330 322 302 Q322 278 340 268 Q342 258 352 258 Z"/>
+        ${pumpkin(262, 300, 90, 62)}`,
+      lines: `
+        <clipPath id="horn-clip"><path d="M250 158 C170 158 110 190 72 232 C58 248 40 236 46 214 C36 234 50 260 78 252 C122 266 182 302 250 302 Z"/></clipPath>
+        <g clip-path="url(#horn-clip)" stroke-width="3">
+          <path d="M120 180 Q140 230 128 290 M170 166 Q190 230 176 300 M210 160 Q228 230 214 305"/>
+        </g>
+        <path d="M270 140 V132 M352 258 q2 -8 8 -12"/>`,
+    },
   ];
 
   window.EduGames.coloringPages = PAGES;
+  window.EduGames.coloringCategories = CATEGORIES;
 })();
