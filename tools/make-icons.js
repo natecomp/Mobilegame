@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const ICONS = path.join(__dirname, '..', 'icons');
+const ICONS = path.join(__dirname, '..', 'public', 'icons');
 const OUTPUTS = [
   { src: 'icon.svg', out: 'icon-192.png', size: 192 },
   { src: 'icon.svg', out: 'icon-512.png', size: 512 },

@@ -10,13 +10,14 @@
  * version takes over only when it's tapped (never in the middle of a game).
  */
 
-const VERSION = 'c770faa2';
+const VERSION = '2aedf076';
 const CACHE_PREFIX = 'little-learners-';
 const CACHE = CACHE_PREFIX + VERSION;
 
+// './' is the app page (index.html). Hosts like Cloudflare redirect /index.html
+// to /, so it is cached under './' only.
 const PRECACHE = [
   './',
-  './index.html',
   './manifest.webmanifest',
   './css/styles.css',
   './fonts/fredoka-latin.woff2',
@@ -27,6 +28,8 @@ const PRECACHE = [
   './js/games/letters.js',
   './js/games/spelling.js',
   './js/games/math.js',
+  './js/games/coloring-pages.js',
+  './js/games/coloring.js',
   './js/app.js',
   './icons/icon.svg',
   './icons/favicon-32.png',
@@ -37,12 +40,29 @@ const PRECACHE = [
   './icons/maskable-512.png',
 ];
 
+/**
+ * Browsers refuse to use a *redirected* response for a page load, so store a
+ * clean copy (e.g. Cloudflare answers /index.html with a redirect to /).
+ */
+async function cleanResponse(response) {
+  if (!response.redirected) return response;
+  const body = await response.blob();
+  return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      // cache: 'reload' bypasses the HTTP cache so we never precache stale files.
-      cache.addAll(PRECACHE.map((url) => new Request(url, { cache: 'reload' })))
-    )
+    (async () => {
+      const cache = await caches.open(CACHE);
+      await Promise.all(
+        PRECACHE.map(async (url) => {
+          // cache: 'reload' bypasses the HTTP cache so we never precache stale files.
+          const response = await fetch(new Request(url, { cache: 'reload' }));
+          if (!response.ok) throw new Error(`Precache failed for ${url}: ${response.status}`);
+          await cache.put(url, await cleanResponse(response));
+        })
+      );
+    })()
   );
   // No skipWaiting() here: an update waits until the page asks for it.
 });
@@ -71,7 +91,7 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        const cached = (await caches.match(request, { ignoreSearch: true })) || (await caches.match('./index.html'));
+        const cached = (await caches.match(request, { ignoreSearch: true })) || (await caches.match('./'));
         return cached || fetch(request);
       })()
     );
@@ -86,7 +106,7 @@ self.addEventListener('fetch', (event) => {
       // Cache anything else from our origin we didn't know about (e.g. screenshots).
       if (response.ok && response.type === 'basic') {
         const cache = await caches.open(CACHE);
-        cache.put(request, response.clone());
+        cache.put(request, await cleanResponse(response.clone()));
       }
       return response;
     })()

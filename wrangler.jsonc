@@ -1,0 +1,12 @@
+// Cloudflare Workers static-assets deployment (no server code needed).
+//   npm run dev      -> local preview at http://localhost:8787 (same headers as production)
+//   npm run deploy   -> stamps the service worker version, then deploys
+// Docs: https://developers.cloudflare.com/workers/static-assets/
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "little-learners",
+  "compatibility_date": "2025-11-01",
+  "assets": {
+    "directory": "./public"
+  }
+}

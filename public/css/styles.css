@@ -572,6 +572,126 @@ a { color: inherit; text-decoration: none; }
 .key-del { background: #f6f4f0; }
 
 /* ---------------------------------------------------------------- */
+/* Color Studio                                                      */
+/* ---------------------------------------------------------------- */
+
+.cs-gallery { width: 100%; text-align: center; }
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(45%, 180px), 1fr));
+  gap: 14px;
+}
+.cs-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 12px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.cs-thumb:active { transform: translateY(2px); }
+.cs-thumb .coloring-svg { width: 100%; height: auto; border-radius: 14px; pointer-events: none; }
+.cs-thumb-label { font-weight: 600; font-size: 1.05rem; }
+.cs-done {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff7d1;
+  box-shadow: var(--shadow-sm);
+  font-size: 1.3rem;
+}
+
+.cs-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 14px;
+  width: 100%;
+}
+.cs-board {
+  width: min(100%, calc(100dvh - 340px));
+  min-width: min(100%, 260px);
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow);
+  border: 4px solid #fff;
+  touch-action: none; /* drawing must not scroll or zoom the page */
+}
+.cs-board.crayon-mode { cursor: crosshair; }
+.coloring-svg { display: block; width: 100%; height: 100%; }
+.coloring-svg .region { cursor: pointer; transition: fill 0.18s ease; }
+.coloring-svg .strokes,
+.coloring-svg .outlines,
+.coloring-svg .details { pointer-events: none; }
+
+.cs-side { display: flex; flex-direction: column; gap: 12px; width: min(100%, 520px); }
+
+.cs-palette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
+.cs-swatch {
+  aspect-ratio: 1;
+  max-height: 52px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15), var(--shadow-sm);
+  transition: transform 0.12s;
+}
+.cs-swatch.white { box-shadow: inset 0 0 0 2px #e5e0d8, inset 0 -4px 0 rgba(0, 0, 0, 0.08), var(--shadow-sm); }
+.cs-swatch[aria-pressed='true'] { transform: scale(1.12); box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--ink); }
+
+.cs-tools { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cs-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 6px 2px;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.cs-tool:active { transform: translateY(2px); box-shadow: none; }
+.cs-tool:disabled { opacity: 0.5; }
+.cs-tool.active { background: var(--accent); color: #fff; }
+.cs-tool-icon { font-size: 1.5rem; line-height: 1; }
+.cs-tool-label { font-size: 0.72rem; font-weight: 600; }
+
+.cs-sizes { display: flex; justify-content: center; gap: 12px; }
+.cs-sizes[hidden] { display: none; }
+.cs-size {
+  width: 56px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.cs-size[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--accent); }
+.cs-size-dot { display: block; border-radius: 50%; background: var(--current, var(--ink)); }
+
+.cs-preview { width: min(60vw, 220px); margin: 0 auto 6px; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.cs-preview .coloring-svg { pointer-events: none; }
+
+/* Tablets/computers in landscape: tools beside the picture. */
+@media (min-width: 760px) and (orientation: landscape) {
+  .cs-studio { grid-template-columns: auto minmax(260px, 340px); align-items: center; }
+  .cs-board { width: min(calc(100vw - 420px), calc(100dvh - 120px), 640px); }
+  .cs-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cs-tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ---------------------------------------------------------------- */
 /* Level picker                                                      */
 /* ---------------------------------------------------------------- */
 

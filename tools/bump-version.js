@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', 'public');
 const SW = path.join(ROOT, 'sw.js');
 const APP_DIRS = ['css', 'js', 'fonts', 'icons'];
 const NOT_PRECACHED_ON_PURPOSE = new Set(['icons/icon-maskable.svg', 'fonts/OFL.txt']);
@@ -22,12 +22,13 @@ const listMatch = sw.match(/const PRECACHE = \[([\s\S]*?)\];/);
 if (!listMatch) throw new Error('Could not find PRECACHE list in sw.js');
 const entries = [...listMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 
-const files = entries
-  .filter((e) => e !== './')
-  .map((e) => e.replace(/^\.\//, ''));
+// './' is the app page itself.
+const files = entries.map((e) => (e === './' ? 'index.html' : e.replace(/^\.\//, '')));
 
 let ok = true;
 const hash = crypto.createHash('sha256');
+// The worker's own logic counts too (minus the VERSION line it is about to rewrite).
+hash.update(sw.replace(/const VERSION = '[^']*';/, '')).update('\0');
 for (const rel of files) {
   const abs = path.join(ROOT, rel);
   if (!fs.existsSync(abs)) {

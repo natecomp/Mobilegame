@@ -1,0 +1,15 @@
+{
+  "name": "little-learners-arcade",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Educational game hub for kids ages 2-10 (installable PWA, deployed on Cloudflare).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "bump": "node tools/bump-version.js",
+    "check": "node tools/bump-version.js --check",
+    "deploy": "node tools/bump-version.js && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.162.0"
+  }
+}
