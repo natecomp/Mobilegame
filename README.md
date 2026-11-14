@@ -19,19 +19,49 @@ It is plain HTML, CSS and JavaScript, with no build step, no dependencies and no
 - **Big touch targets** and no double-tap zoom. Layouts tested from iPhone SE size up to desktop.
 - **Sound effects** are made in code with WebAudio. 🔔 and 🗣️ in the hub toggle sounds and the voice.
 - **Saves progress**: total stars, best score per game and level, and the age filter are kept in `localStorage`.
-- **Installable**: there's a web app manifest, so you can use "Add to Home Screen" on phones and tablets.
+- **Installable, works offline**: it's a Progressive Web App (see below).
 - Respects `prefers-reduced-motion`.
 
 ## Run it
 
-Open `index.html` in a browser. Or serve the folder, which works best on phones on your network:
+Open `index.html` in a browser to play straight away. To get offline play and installing, serve it over http(s):
 
 ```bash
 python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
-It deploys as-is to any static host (GitHub Pages, Netlify, Vercel, S3 and so on).
+## Install it (Progressive Web App)
+
+Little Learners is an installable PWA. After the first visit it works with **no internet connection**, and it opens full screen from the home screen like a native app.
+
+| Device | How to install |
+|---|---|
+| Android (Chrome, Edge, Samsung Internet) | Tap **Install** on the card in the hub, or use the browser menu: **Install app** |
+| Windows / Mac / ChromeOS (Chrome, Edge) | Tap **Install** in the hub, or use the install icon in the address bar |
+| iPhone / iPad (Safari) | Tap **Install** in the hub for step-by-step help: **Share** → **Add to Home Screen** |
+
+If the install card is dismissed, a small 📲 button stays in the hub's top bar. Long-pressing the installed app icon (Android, desktop) gives shortcuts straight into each game.
+
+**Installing needs HTTPS.** Browsers only allow installing from `https://` (or `http://localhost`). Any static host with HTTPS works as-is, e.g. GitHub Pages, Netlify, Cloudflare Pages or Vercel. There's no build step: just publish the repository folder.
+
+### How it works
+- `manifest.webmanifest` holds the name, colors, icons (including maskable icons for Android), game shortcuts and install-dialog screenshots.
+- `sw.js` is the service worker. It precaches every app file on install, then serves cache-first, so loads are instant and play works offline. The font is self-hosted for the same reason.
+- `js/pwa.js` registers the worker, shows the hub's **Install** card (and the iOS instructions), and shows **"A new version is ready"** when an update has downloaded. Updates apply only when that button is tapped, never mid-game.
+
+### Releasing changes ⚠️
+Installed apps keep serving their cached copy until the service worker changes. **After editing any app file, run:**
+
+```bash
+node tools/bump-version.js
+```
+
+This stamps `sw.js` with a hash of all precached files, so devices pick up the update. It also fails if `PRECACHE` lists a missing file, and warns about files that aren't precached. **If you add a file** (e.g. a new game), add it to `PRECACHE` in `sw.js` too. `node tools/bump-version.js --check` exits non-zero when the version is stale, which is handy in CI.
+
+Asset scripts (they need Playwright: `npm i -D playwright`):
+- `node tools/make-icons.js` renders the PNG icons from `icons/icon.svg` and `icons/icon-maskable.svg`.
+- `node tools/make-screenshots.js` regenerates the `screenshots/` used in the install dialog.
 
 ## Project layout
 
@@ -39,10 +69,15 @@ It deploys as-is to any static host (GitHub Pages, Netlify, Vercel, S3 and so on
 index.html              entry point; loads the scripts below in order
 css/styles.css          all styling (mobile-first)
 js/core.js              EduGames engine: registry, DOM helper, speech, sfx, confetti, storage, level picker
-js/app.js               hub (age filter, game cards) + game screen shell + end-of-game card
+js/pwa.js               service worker registration, install button, update notice
+js/app.js               hub (age filter, game cards, install/update cards) + game screen shell + end card
 js/games/*.js           one file per game; each calls EduGames.register({...})
+sw.js                   service worker (offline cache)
 manifest.webmanifest    PWA metadata
-icon.svg                app icon
+icons/                  app icons (SVG sources + generated PNGs)
+fonts/                  self-hosted Fredoka font + its license (OFL)
+screenshots/            install-dialog screenshots referenced by the manifest
+tools/                  bump-version, make-icons, make-screenshots
 ```
 
 ## Adding a game
@@ -82,6 +117,8 @@ icon.svg                app icon
 ```
 
 2. Add `<script src="js/games/mygame.js"></script>` to `index.html`, before `js/app.js`.
+3. Add `'./js/games/mygame.js'` to `PRECACHE` in `sw.js`, then run `node tools/bump-version.js`.
+   You can also add a shortcut for it in `manifest.webmanifest`.
 
 ### The game `api`
 

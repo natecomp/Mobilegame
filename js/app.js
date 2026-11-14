@@ -107,11 +107,12 @@
         'header',
         { class: 'topbar' },
         el('div', { class: 'brand' }, el('span', { class: 'brand-logo', 'aria-hidden': 'true' }, '🎈'), el('h1', null, 'Little Learners Arcade')),
-        el('div', { class: 'topbar-right' }, starBadge().badge, settingsButtons())
+        el('div', { class: 'topbar-right' }, starBadge().badge, installMiniButton(), settingsButtons())
       ),
       el(
         'main',
         { class: 'hub' },
+        appCards(),
         el('p', { class: 'hub-intro' }, 'Pick a game and start learning!'),
         el('div', { class: 'chips', role: 'group', 'aria-label': 'Filter games by age' }, chips),
         el('div', { class: 'game-grid' }, visible.map(gameCard)),
@@ -123,6 +124,59 @@
         )
       )
     );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Install / update cards (see js/pwa.js)                              */
+  /* ------------------------------------------------------------------ */
+
+  function appCards() {
+    const pwa = EG.pwa;
+    if (!pwa) return null;
+    if (pwa.updateReady) {
+      return el(
+        'div',
+        { class: 'app-card', role: 'status' },
+        el('span', { class: 'app-card-icon', 'aria-hidden': 'true' }, '✨'),
+        el('div', { class: 'app-card-text' }, el('b', null, 'A new version is ready!'), el('span', null, 'Update to get the latest games and fixes.')),
+        el('button', { class: 'btn primary small', onclick: () => pwa.applyUpdate() }, 'Update')
+      );
+    }
+    if (pwa.canInstall && !store.state.installDismissed) {
+      return el(
+        'div',
+        { class: 'app-card' },
+        el('span', { class: 'app-card-icon', 'aria-hidden': 'true' }, '📲'),
+        el(
+          'div',
+          { class: 'app-card-text' },
+          el('b', null, 'Install Little Learners'),
+          el('span', null, 'Open it from your home screen, full screen, and play even without internet.')
+        ),
+        el('button', { class: 'btn primary small', onclick: () => pwa.install() }, 'Install'),
+        el(
+          'button',
+          {
+            class: 'app-card-close',
+            'aria-label': 'Not now',
+            title: 'Not now',
+            onclick: () => {
+              store.set('installDismissed', true);
+              renderHub();
+            },
+          },
+          '✕'
+        )
+      );
+    }
+    return null;
+  }
+
+  /** Small install button that stays available after the card is dismissed. */
+  function installMiniButton() {
+    const pwa = EG.pwa;
+    if (!pwa || !pwa.canInstall || !store.state.installDismissed) return null;
+    return el('button', { class: 'icon-btn', 'aria-label': 'Install app', title: 'Install app', onclick: () => pwa.install() }, '📲');
   }
 
   function gameCard(game) {
@@ -314,5 +368,9 @@
   }
 
   window.addEventListener('hashchange', route);
+  // Refresh the hub when install/update availability changes (never interrupts a game).
+  EG.pwa?.subscribe(() => {
+    if (!teardownCurrent) renderHub();
+  });
   route();
 })();
