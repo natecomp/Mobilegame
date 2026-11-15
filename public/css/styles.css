@@ -30,6 +30,14 @@
 
 html, body { margin: 0; min-height: 100%; }
 
+/* App-like touch: no pinch/double-tap zoom, no pull-to-refresh or rubber-band bounce.
+   (touch-action is intersected down the tree, so setting it on html covers every element.
+   overscroll-behavior must be on the root element for the browser's pull-to-refresh.) */
+html {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(--font);
   color: var(--ink);
@@ -37,11 +45,12 @@ body {
   background-image: radial-gradient(rgba(124, 58, 237, 0.07) 2px, transparent 2px);
   background-size: 28px 28px;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: pan-x pan-y;
   -webkit-user-select: none;
+  -webkit-touch-callout: none; /* no long-press callout menus */
   user-select: none;
   overflow-x: hidden;
-  overscroll-behavior-y: none; /* no accidental pull-to-refresh mid-game */
+  overscroll-behavior: none;
 }
 
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
@@ -618,16 +627,39 @@ a { color: inherit; text-decoration: none; }
   font-size: 1.3rem;
 }
 
+/* While a picture is open it fills the whole screen: no game bar, and the
+   picture is the biggest square that fits beside or above the tools. */
+.game-screen.cs-immersive { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.game-screen.cs-immersive .game-bar { display: none; }
+.game-screen.cs-immersive .stage {
+  max-width: none;
+  min-height: 0;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+.game-screen.cs-immersive .stage > .cs-studio { margin: 0; }
+
 .cs-studio {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: 14px;
+  flex: 1;
+  min-height: 0;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* picture and tools stay together, centered */
+  gap: 10px;
+}
+.cs-board-wrap {
+  /* As tall as the screen is wide, shrinking when the tools need the room. */
+  flex: 0 1 calc(100vw - 16px);
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;
 }
 .cs-board {
-  width: min(100%, calc(100dvh - 340px));
-  min-width: min(100%, 260px);
+  width: min(100%, calc(100dvh - 260px)); /* fallback without container units */
+  width: min(100cqw, 100cqh);
   aspect-ratio: 1;
   border-radius: var(--radius);
   overflow: hidden;
@@ -643,12 +675,14 @@ a { color: inherit; text-decoration: none; }
 .coloring-svg .outlines,
 .coloring-svg .details { pointer-events: none; }
 
-.cs-side { display: flex; flex-direction: column; gap: 12px; width: min(100%, 520px); }
+.cs-side { flex: none; display: flex; flex-direction: column; gap: 10px; width: min(100%, 560px); }
 
 .cs-palette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
 .cs-swatch {
+  width: 100%;
+  max-width: 52px;
+  justify-self: center;
   aspect-ratio: 1;
-  max-height: 52px;
   border-radius: 50%;
   background: var(--swatch);
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15), var(--shadow-sm);
@@ -657,7 +691,7 @@ a { color: inherit; text-decoration: none; }
 .cs-swatch.white { box-shadow: inset 0 0 0 2px #e5e0d8, inset 0 -4px 0 rgba(0, 0, 0, 0.08), var(--shadow-sm); }
 .cs-swatch[aria-pressed='true'] { transform: scale(1.12); box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--ink); }
 
-.cs-tools { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cs-tools { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
 .cs-tool {
   display: flex;
   flex-direction: column;
@@ -674,6 +708,7 @@ a { color: inherit; text-decoration: none; }
 .cs-tool:disabled { opacity: 0.5; }
 .cs-tool.active { background: var(--accent); color: #fff; }
 .cs-tool-icon { font-size: 1.5rem; line-height: 1; }
+.cs-tool-icon svg { display: block; }
 .cs-tool-label { font-size: 0.72rem; font-weight: 600; }
 
 .cs-sizes { display: flex; justify-content: center; gap: 12px; }
@@ -693,12 +728,29 @@ a { color: inherit; text-decoration: none; }
 .cs-preview { width: min(60vw, 220px); margin: 0 auto 6px; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow-sm); }
 .cs-preview .coloring-svg { pointer-events: none; }
 
-/* Tablets/computers in landscape: tools beside the picture. */
-@media (min-width: 760px) and (orientation: landscape) {
-  .cs-studio { grid-template-columns: auto minmax(260px, 340px); align-items: center; }
-  .cs-board { width: min(calc(100vw - 420px), calc(100dvh - 120px), 640px); }
+/* Landscape: tools in a column beside the picture. */
+@media (orientation: landscape) {
+  .cs-studio { flex-direction: row; justify-content: center; gap: 14px; }
+  .cs-board-wrap { flex: 0 1 calc(100dvh - 16px); height: 100%; min-width: 0; }
+  .cs-side {
+    width: clamp(240px, 30vw, 350px);
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px; /* room for the selected color's ring */
+  }
   .cs-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .cs-tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cs-tools { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* Phones on their side: squeeze the tools so they fit the short screen. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .cs-side { gap: 8px; }
+  .cs-palette { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+  .cs-swatch { max-width: 40px; }
+  .cs-tool { min-height: 46px; padding: 4px 2px; }
+  .cs-tool-icon { font-size: 1.2rem; }
+  .cs-tool-label { font-size: 0.66rem; }
+  .cs-size { height: 40px; }
 }
 
 /* ---------------------------------------------------------------- */

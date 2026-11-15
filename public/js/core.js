@@ -303,6 +303,18 @@
   };
 
   /* ------------------------------------------------------------------ */
+  /* No zooming                                                          */
+  /* ------------------------------------------------------------------ */
+  // Little hands pinch and double-tap by accident. CSS touch-action and the
+  // viewport tag stop zooming in most browsers, but iOS Safari still pinch-zooms,
+  // so its gesture events are cancelled here. Ctrl+wheel is a trackpad pinch.
+  const noDefault = (e) => e.preventDefault();
+  const active = { passive: false };
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, noDefault, active));
+  document.addEventListener('touchmove', (e) => e.touches.length > 1 && e.preventDefault(), active);
+  document.addEventListener('wheel', (e) => e.ctrlKey && e.preventDefault(), active);
+
+  /* ------------------------------------------------------------------ */
   /* Confetti                                                            */
   /* ------------------------------------------------------------------ */
 

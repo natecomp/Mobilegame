@@ -254,6 +254,35 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Full screen                                                         */
+  /* ------------------------------------------------------------------ */
+  // A picture always gets the whole window (see .cs-immersive). Where the
+  // browser allows it (Android, iPad, computers; not iPhone) the studio also
+  // goes truly full screen, hiding the browser and system bars.
+  const root = document.documentElement;
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const canFullscreen = () =>
+    !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !window.matchMedia?.('(display-mode: fullscreen)').matches;
+  // Both calls can refuse (e.g. no tap to start it); the window layout still applies then.
+  const quietly = (target, fn, ...args) => {
+    try {
+      fn?.apply(target, args)?.catch?.(() => {});
+    } catch {
+      /* ignore */
+    }
+  };
+  const enterFullscreen = () =>
+    !fullscreenElement() && quietly(root, root.requestFullscreen || root.webkitRequestFullscreen, { navigationUI: 'hide' });
+  const exitFullscreen = () => fullscreenElement() && quietly(document, document.exitFullscreen || document.webkitExitFullscreen);
+  // Opening a picture on a phone/tablet goes full screen by itself; on a computer it's a button.
+  const autoFullscreen = () => !!window.matchMedia?.('(pointer: coarse)').matches;
+
+  const ICON_EXPAND =
+    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  const ICON_SHRINK =
+    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+
+  /* ------------------------------------------------------------------ */
   /* Game                                                                */
   /* ------------------------------------------------------------------ */
 
@@ -272,6 +301,34 @@
     };
     document.addEventListener('keydown', onKey);
     api.onCleanup(() => document.removeEventListener('keydown', onKey));
+
+    const screen = api.stage.closest('.game-screen');
+    let fullscreenBtn = null; // the open page's toggle, if any
+    let exitingOnPurpose = false;
+    const setImmersive = (on) => screen?.classList.toggle('cs-immersive', on);
+    const paintFullscreenBtn = () => {
+      if (!fullscreenBtn) return;
+      const on = !!fullscreenElement();
+      fullscreenBtn.querySelector('.cs-tool-icon').innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
+      fullscreenBtn.querySelector('.cs-tool-label').textContent = on ? 'Exit' : 'Full';
+      fullscreenBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+      fullscreenBtn.setAttribute('aria-pressed', String(on));
+    };
+    const onFullscreenChange = () => {
+      // Left full screen with the browser's own controls (Back, Esc): don't keep forcing it.
+      if (!fullscreenElement() && !exitingOnPurpose && fullscreenBtn) prefs.fullscreen = false;
+      exitingOnPurpose = false;
+      paintFullscreenBtn();
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    api.onCleanup(() => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      setImmersive(false);
+      exitingOnPurpose = true;
+      exitFullscreen();
+    });
 
     /** A gallery button showing the picture with its saved colors. */
     function thumb(page, i) {
@@ -296,6 +353,9 @@
 
     function showGallery() {
       currentUndo = null;
+      fullscreenBtn = null;
+      setImmersive(false);
+      window.scrollTo(0, 0);
       delete api.memory.pageId;
       api.prompt('Pick a picture to color!');
       let n = 0;
@@ -320,6 +380,8 @@
 
     function openPage(page) {
       api.memory.pageId = page.id;
+      setImmersive(true);
+      if (canFullscreen() && (prefs.fullscreen ?? autoFullscreen())) enterFullscreen();
       const built = buildPage(page);
       const { svg, regions, strokesLayer } = built;
       const state = loadState(page, built);
@@ -512,6 +574,19 @@
       const fillBtn = tool('fill', '🪣', 'Fill', pickTool('fill'));
       const crayonBtn = tool('crayon', '🖍️', 'Crayon', pickTool('crayon'));
       const saveBtn = tool('save', '💾', 'Save', () => savePicture(saveBtn));
+      fullscreenBtn = canFullscreen()
+        ? tool('fullscreen', '', 'Full', () => {
+            api.sfx.tap();
+            if (fullscreenElement()) {
+              prefs.fullscreen = false;
+              exitingOnPurpose = true;
+              exitFullscreen();
+            } else {
+              prefs.fullscreen = true;
+              enterFullscreen();
+            }
+          })
+        : null;
       const tools = el(
         'div',
         { class: 'cs-tools' },
@@ -521,6 +596,7 @@
         tool('undo', '↩️', 'Undo', undo),
         tool('clear', '🧽', 'Clear', clearPage),
         saveBtn,
+        fullscreenBtn,
         tool('done', '✅', 'Done', finishPage)
       );
 
@@ -558,11 +634,12 @@
       const studio = el(
         'div',
         { class: 'cs-studio' },
-        board,
+        el('div', { class: 'cs-board-wrap' }, board),
         el('div', { class: 'cs-side' }, el('div', { class: 'cs-palette', role: 'group', 'aria-label': 'Colors' }, swatches), tools, sizes)
       );
       api.stage.replaceChildren(studio);
       paintControls();
+      paintFullscreenBtn();
 
       currentUndo = undo;
 
