@@ -22,24 +22,47 @@
   const STORAGE_PREFIX = 'little-learners:coloring:';
   const FILLABLE = 'circle,ellipse,rect,polygon,path,text'; // <text> = bubble letters
 
+  // The crayon box, in rainbow order, then skin tones and neutrals.
   const PALETTE = [
     { name: 'red', hex: '#ef4444' },
     { name: 'orange', hex: '#f97316' },
     { name: 'yellow', hex: '#facc15' },
+    { name: 'light yellow', hex: '#fef08a' },
     { name: 'light green', hex: '#a3e635' },
     { name: 'green', hex: '#16a34a' },
+    { name: 'dark green', hex: '#166534' },
+    { name: 'mint', hex: '#86efac' },
     { name: 'teal', hex: '#14b8a6' },
     { name: 'sky blue', hex: '#7dd3fc' },
     { name: 'blue', hex: '#2563eb' },
+    { name: 'dark blue', hex: '#1e3a8a' },
+    { name: 'lavender', hex: '#c4b5fd' },
     { name: 'purple', hex: '#9333ea' },
     { name: 'pink', hex: '#f472b6' },
+    { name: 'light pink', hex: '#fbcfe8' },
     { name: 'peach', hex: '#fed7aa' },
     { name: 'tan', hex: '#d6b48a' },
+    { name: 'light brown', hex: '#b0784a' },
     { name: 'brown', hex: '#92400e' },
+    { name: 'dark brown', hex: '#4a2c17' },
     { name: 'gray', hex: '#9ca3af' },
     { name: 'black', hex: '#1f2937' },
     { name: 'white', hex: BLANK },
   ];
+  const byHex = new Map(PALETTE.map((c) => [c.hex, c]));
+  const RECENT_MAX = 3;
+  const HOLD_TO_CLEAR_MS = 800;
+
+  /** Dark or light text, whichever reads better on this color. */
+  function inkOn(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map((v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? INK : '#fff';
+  }
+  const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
   const SIZES = [
     { id: 'small', width: 6, dot: 10 },
@@ -286,11 +309,18 @@
   /* Game                                                                */
   /* ------------------------------------------------------------------ */
 
+  const ICON_BACK =
+    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+  const ICON_CHECK =
+    '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
   function mount(api) {
     const pages = EG.coloringPages || [];
     // Tool choices carry over between pictures within a visit.
     const prefs = api.memory.prefs || (api.memory.prefs = { color: PALETTE[0], tool: 'fill', size: SIZES[1] });
     const doneMap = () => store.state.coloringDone || {};
+    // The last few colors actually used, newest first (kept between visits).
+    const recentColors = () => (store.state.coloringRecent || []).map((h) => byHex.get(h)).filter(Boolean);
 
     let currentUndo = null; // undo for the open page (Ctrl/⌘+Z)
     const onKey = (e) => {
@@ -309,9 +339,9 @@
     const paintFullscreenBtn = () => {
       if (!fullscreenBtn) return;
       const on = !!fullscreenElement();
-      fullscreenBtn.querySelector('.cs-tool-icon').innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
-      fullscreenBtn.querySelector('.cs-tool-label').textContent = on ? 'Exit' : 'Full';
+      fullscreenBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
       fullscreenBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+      fullscreenBtn.title = on ? 'Exit full screen' : 'Full screen';
       fullscreenBtn.setAttribute('aria-pressed', String(on));
     };
     const onFullscreenChange = () => {
@@ -399,6 +429,7 @@
         state.fills[i] = prefs.color.hex;
         region.setAttribute('fill', prefs.color.hex);
         api.sfx.tap(500 + Math.random() * 300);
+        noteRecent();
         save();
       }
 
@@ -413,6 +444,7 @@
       let drawing = null; // { id, path, d, last }
 
       svg.addEventListener('pointerdown', (e) => {
+        sizePop.hidden = true;
         if (prefs.tool === 'fill') {
           const region = e.target.closest?.('.region');
           if (region) fillRegion(region);
@@ -445,6 +477,7 @@
         state.strokes.push({ c: prefs.color.hex, w: prefs.size.width, d: drawing.d });
         history.push({ type: 'stroke' });
         drawing = null;
+        noteRecent();
         save();
       };
       svg.addEventListener('pointerup', endStroke);
@@ -540,106 +573,211 @@
 
       /* ---------- Controls ---------- */
 
-      const swatches = PALETTE.map((c) =>
+      const pickColor = (c, { say = true } = {}) => {
+        prefs.color = c;
+        paintControls();
+        api.sfx.tap(700);
+        if (!say) return;
+        api.speak(c.name);
+        nameBubble.textContent = titleCase(c.name);
+        U.replayClass(nameBubble, 'show');
+      };
+
+      // Crayon box
+      const crayons = PALETTE.map((c) =>
         el('button', {
-          class: 'cs-swatch' + (c.hex === BLANK ? ' white' : ''),
+          class: 'cs-crayon' + (c.hex === BLANK ? ' white' : ''),
           style: { '--swatch': c.hex },
           'aria-label': c.name,
           title: c.name,
-          'aria-pressed': String(c === prefs.color),
-          onclick: () => {
-            prefs.color = c;
-            paintControls();
-            api.sfx.tap(700);
-            api.speak(c.name);
-          },
+          onclick: () => pickColor(c),
         })
       );
+      const recent = el('div', { class: 'cs-recent', role: 'group', 'aria-label': 'Recent colors' });
+      function paintRecent() {
+        const list = recentColors();
+        recent.hidden = list.length === 0;
+        recent.replaceChildren(
+          ...list.map((c) =>
+            el('button', {
+              class: 'cs-dot',
+              style: { '--swatch': c.hex },
+              'aria-label': 'recent ' + c.name,
+              title: c.name,
+              onclick: () => pickColor(c),
+            })
+          )
+        );
+      }
+      function noteRecent() {
+        const hex = prefs.color.hex;
+        const list = store.state.coloringRecent || [];
+        if (list[0] === hex) return;
+        store.set('coloringRecent', [hex, ...list.filter((h) => h !== hex)].slice(0, RECENT_MAX));
+        paintRecent();
+      }
+      const colors = el('div', { class: 'cs-colors' }, el('div', { class: 'cs-crayons', role: 'group', 'aria-label': 'Crayons' }, crayons));
 
-      const tool = (id, icon, label, onClick) =>
+      // Fill / Crayon switch, with crayon sizes popping up from the Crayon button
+      const mode = (id, icon, label) =>
         el(
           'button',
-          { class: 'cs-tool', dataset: { tool: id }, 'aria-label': label, onclick: onClick },
-          el('span', { class: 'cs-tool-icon', 'aria-hidden': 'true' }, icon),
-          el('span', { class: 'cs-tool-label' }, label)
+          { class: 'cs-mode', dataset: { tool: id }, 'aria-label': label },
+          el('span', { class: 'cs-mode-icon', 'aria-hidden': 'true' }, icon),
+          el('span', null, label)
         );
+      const fillBtn = mode('fill', '🪣', 'Fill');
+      const crayonBtn = mode('crayon', '🖍️', 'Crayon');
+      const sizeDot = el('span', { class: 'cs-mode-size', 'aria-hidden': 'true' });
+      crayonBtn.append(sizeDot);
 
-      const pickTool = (id) => () => {
-        prefs.tool = id;
-        paintControls();
-        api.sfx.tap();
-        api.speak(id === 'fill' ? 'Tap to fill!' : 'Draw with your crayon!');
-      };
-
-      const fillBtn = tool('fill', '🪣', 'Fill', pickTool('fill'));
-      const crayonBtn = tool('crayon', '🖍️', 'Crayon', pickTool('crayon'));
-      const saveBtn = tool('save', '💾', 'Save', () => savePicture(saveBtn));
-      fullscreenBtn = canFullscreen()
-        ? tool('fullscreen', '', 'Full', () => {
-            api.sfx.tap();
-            if (fullscreenElement()) {
-              prefs.fullscreen = false;
-              exitingOnPurpose = true;
-              exitFullscreen();
-            } else {
-              prefs.fullscreen = true;
-              enterFullscreen();
-            }
-          })
-        : null;
-      const tools = el(
-        'div',
-        { class: 'cs-tools' },
-        tool('pages', '🖼️', 'Pictures', showGallery),
-        fillBtn,
-        crayonBtn,
-        tool('undo', '↩️', 'Undo', undo),
-        tool('clear', '🧽', 'Clear', clearPage),
-        saveBtn,
-        fullscreenBtn,
-        tool('done', '✅', 'Done', finishPage)
-      );
-
-      const sizeButtons = SIZES.map((s) =>
+      const sizeButtons = SIZES.map((sz) =>
         el(
           'button',
           {
             class: 'cs-size',
-            'aria-label': s.id + ' crayon',
-            title: s.id,
+            'aria-label': sz.id + ' crayon',
+            title: sz.id,
             onclick: () => {
-              prefs.size = s;
+              prefs.size = sz;
+              sizePop.hidden = true;
               paintControls();
-              api.sfx.tap(300 + s.width * 20);
+              api.sfx.tap(300 + sz.width * 20);
             },
           },
-          el('span', { class: 'cs-size-dot', style: { width: s.dot + 'px', height: s.dot + 'px' } })
+          el('span', { class: 'cs-size-dot', style: { width: sz.dot + 'px', height: sz.dot + 'px' } })
         )
       );
-      const sizes = el('div', { class: 'cs-sizes', role: 'group', 'aria-label': 'Crayon size' }, sizeButtons);
+      const sizePop = el('div', { class: 'cs-size-pop', role: 'group', 'aria-label': 'Crayon size', hidden: true }, sizeButtons);
+
+      fillBtn.addEventListener('click', () => {
+        sizePop.hidden = true;
+        if (prefs.tool === 'fill') return;
+        prefs.tool = 'fill';
+        paintControls();
+        api.sfx.tap();
+        api.speak('Tap to fill!');
+      });
+      crayonBtn.addEventListener('click', () => {
+        if (prefs.tool === 'crayon') {
+          sizePop.hidden = !sizePop.hidden; // tap again to change the size
+          api.sfx.tap();
+          return;
+        }
+        prefs.tool = 'crayon';
+        sizePop.hidden = false;
+        paintControls();
+        api.sfx.tap();
+        api.speak('Draw with your crayon!');
+      });
+      const modes = el('div', { class: 'cs-modes', role: 'group', 'aria-label': 'Tool' }, fillBtn, crayonBtn, sizePop);
+
+      // Top bar
+      const topBtn = (id, icon, label, onClick, extra = '') =>
+        el(
+          'button',
+          { class: 'cs-btn ' + extra, dataset: { tool: id }, 'aria-label': label, title: label, onclick: onClick },
+          icon.startsWith('<svg') ? el('span', { 'aria-hidden': 'true', html: icon }) : el('span', { 'aria-hidden': 'true' }, icon)
+        );
+      const saveBtn = topBtn('save', '💾', 'Save picture', () => savePicture(saveBtn));
+      const clearBtn = topBtn('clear', '🗑️', 'Clear the picture (hold)', null, 'clear');
+      clearBtn.style.setProperty('--hold', HOLD_TO_CLEAR_MS + 'ms');
+
+      // Clearing takes a press-and-hold so a stray tap can't wipe a picture.
+      let holdTimer = null;
+      const stopHold = () => {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        clearBtn.classList.remove('holding');
+      };
+      clearBtn.addEventListener('pointerdown', () => {
+        if (isEmpty(state)) return;
+        clearBtn.classList.add('holding');
+        holdTimer = setTimeout(() => {
+          stopHold();
+          clearPage();
+        }, HOLD_TO_CLEAR_MS);
+      });
+      clearBtn.addEventListener('pointerup', () => {
+        if (!holdTimer) return;
+        stopHold();
+        U.replayClass(clearBtn, 'wobble');
+        api.speak('Hold the trash can down to clear the picture.');
+      });
+      clearBtn.addEventListener('pointerleave', stopHold);
+      clearBtn.addEventListener('pointercancel', stopHold);
+      clearBtn.addEventListener('contextmenu', (e) => e.preventDefault()); // long press = hold, not a menu
+      clearBtn.addEventListener('click', (e) => {
+        if (e.detail === 0) clearPage(); // keyboard (Enter/Space); Undo brings it back
+        else if (isEmpty(state)) api.speak('The page is already clean.');
+      });
+
+      fullscreenBtn = canFullscreen()
+        ? el('button', {
+            class: 'cs-btn',
+            dataset: { tool: 'fullscreen' },
+            onclick: () => {
+              api.sfx.tap();
+              if (fullscreenElement()) {
+                prefs.fullscreen = false;
+                exitingOnPurpose = true;
+                exitFullscreen();
+              } else {
+                prefs.fullscreen = true;
+                enterFullscreen();
+              }
+            },
+          })
+        : null;
+
+      const top = el(
+        'div',
+        { class: 'cs-top' },
+        topBtn('pages', ICON_BACK, 'All pictures', showGallery, 'back'),
+        topBtn('undo', '↩️', 'Undo', undo),
+        clearBtn,
+        el('span', { class: 'cs-spacer' }),
+        fullscreenBtn,
+        saveBtn,
+        topBtn('done', ICON_CHECK, 'Done', finishPage, 'done')
+      );
 
       function paintControls() {
-        swatches.forEach((s, i) => s.setAttribute('aria-pressed', String(PALETTE[i] === prefs.color)));
-        fillBtn.classList.toggle('active', prefs.tool === 'fill');
-        crayonBtn.classList.toggle('active', prefs.tool === 'crayon');
+        crayons.forEach((b, i) => b.setAttribute('aria-pressed', String(PALETTE[i] === prefs.color)));
         fillBtn.setAttribute('aria-pressed', String(prefs.tool === 'fill'));
         crayonBtn.setAttribute('aria-pressed', String(prefs.tool === 'crayon'));
-        sizes.hidden = prefs.tool !== 'crayon';
         sizeButtons.forEach((b, i) => b.setAttribute('aria-pressed', String(SIZES[i] === prefs.size)));
+        const dot = Math.round(prefs.size.dot * 0.6);
+        sizeDot.style.width = sizeDot.style.height = dot + 'px';
         studio.style.setProperty('--current', prefs.color.hex);
+        studio.style.setProperty('--current-ink', inkOn(prefs.color.hex));
         board.classList.toggle('crayon-mode', prefs.tool === 'crayon');
       }
 
-      const board = el('div', { class: 'cs-board' }, svg);
+      const nameBubble = el('div', { class: 'cs-name', 'aria-hidden': 'true' });
+      const board = el('div', { class: 'cs-board' }, svg, nameBubble);
       const studio = el(
         'div',
         { class: 'cs-studio' },
+        top,
         el('div', { class: 'cs-board-wrap' }, board),
-        el('div', { class: 'cs-side' }, el('div', { class: 'cs-palette', role: 'group', 'aria-label': 'Colors' }, swatches), tools, sizes)
+        el('div', { class: 'cs-dock' }, modes, recent, colors)
       );
+      // Tapping anywhere else closes the size pop-up.
+      studio.addEventListener('pointerdown', (e) => {
+        if (!sizePop.hidden && !modes.contains(e.target)) sizePop.hidden = true;
+      });
       api.stage.replaceChildren(studio);
       paintControls();
+      paintRecent();
       paintFullscreenBtn();
+      // Bring the chosen crayon into view in the scrolling crayon box.
+      const chosen = crayons[PALETTE.indexOf(prefs.color)];
+      if (chosen && colors.scrollWidth > colors.clientWidth) {
+        const c = chosen.getBoundingClientRect();
+        const box = colors.getBoundingClientRect();
+        colors.scrollLeft += c.left + c.width / 2 - (box.left + box.width / 2);
+      }
 
       currentUndo = undo;
 

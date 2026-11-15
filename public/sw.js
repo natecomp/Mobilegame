@@ -10,7 +10,7 @@
  * version takes over only when it's tapped (never in the middle of a game).
  */
 
-const VERSION = '8b5dd488';
+const VERSION = '5445ada8';
 const CACHE_PREFIX = 'little-learners-';
 const CACHE = CACHE_PREFIX + VERSION;
 
