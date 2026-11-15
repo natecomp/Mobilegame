@@ -77,13 +77,58 @@
   /* ------------------------------------------------------------------ */
 
   /**
+   * Stretches a shape that touches the top or bottom edge of the 400×400
+   * canvas out to new edges, so a taller-than-square picture keeps its sky
+   * and ground reaching the paper's edges. Handles rects, polygons and paths
+   * with absolute commands (all the pages use); other shapes are left alone.
+   */
+  function stretchShape(shape, top, bottom) {
+    const EDGE = 0.5;
+    const moveY = (y) => (y <= EDGE ? top : y >= 400 - EDGE ? bottom : y);
+    const tag = shape.tagName.toLowerCase();
+    if (tag === 'rect') {
+      const y = +shape.getAttribute('y') || 0;
+      const h = +shape.getAttribute('height') || 0;
+      const y1 = moveY(y);
+      const y2 = moveY(y + h);
+      shape.setAttribute('y', y1);
+      shape.setAttribute('height', y2 - y1);
+    } else if (tag === 'polygon' || tag === 'polyline') {
+      const n = shape.getAttribute('points').trim().split(/[\s,]+/).map(Number);
+      shape.setAttribute('points', n.map((v, i) => (i % 2 ? moveY(v) : v)).join(' '));
+    } else if (tag === 'path') {
+      const tokens = shape.getAttribute('d').match(/[A-Za-z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) || [];
+      let cmd = '';
+      let arg = 0;
+      const out = tokens.map((t) => {
+        if (/[A-Za-z]/.test(t)) {
+          cmd = t;
+          arg = 0;
+          return t;
+        }
+        const v = Number(t);
+        const i = arg++;
+        if (cmd === 'V') return moveY(v);
+        if ('MLTQSC'.includes(cmd) && i % 2 === 1) return moveY(v); // absolute x,y pairs
+        return v; // H, arcs and relative commands stay as they are
+      });
+      shape.setAttribute('d', out.join(' '));
+    }
+  }
+
+  /**
    * Builds the layered SVG for a page:
    *   regions (fillable) → crayon strokes → outlines → details
    * so outlines always stay crisp on top of the color.
    */
-  function buildPage(page) {
+  function buildPage(page, tall = 1) {
+    // tall > 1 makes the paper taller than it is wide (to fill a tall screen):
+    // the drawing stays centred, and the sky and ground stretch to the edges.
+    const extra = Math.max(0, 400 * (tall - 1));
+    const top = -extra / 2;
+    const bottom = 400 + extra / 2;
     const svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 400 400');
+    svg.setAttribute('viewBox', `0 ${top} 400 ${400 + extra}`);
     svg.setAttribute('class', 'coloring-svg');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', page.title);
@@ -108,6 +153,11 @@
       }
       return list.join(' ');
     };
+    if (extra) {
+      for (const shape of regions) {
+        if (!shape.getAttribute('transform') && !transformOf(shape)) stretchShape(shape, top, bottom);
+      }
+    }
     const copy = (shape, fill) => {
       const c = shape.cloneNode(true); // deep: keeps the letters of <text>
       c.setAttribute('fill', fill);
@@ -131,9 +181,10 @@
       const mask = document.createElementNS(NS, 'mask');
       mask.setAttribute('id', id);
       mask.setAttribute('maskUnits', 'userSpaceOnUse');
-      for (const [k, v] of Object.entries({ x: -10, y: -10, width: 420, height: 420 })) mask.setAttribute(k, v);
+      const bounds = { x: -10, y: top - 10, width: 420, height: 420 + extra };
+      for (const [k, v] of Object.entries(bounds)) mask.setAttribute(k, v);
       const paper = document.createElementNS(NS, 'rect');
-      for (const [k, v] of Object.entries({ x: -10, y: -10, width: 420, height: 420, fill: '#fff' })) paper.setAttribute(k, v);
+      for (const [k, v] of Object.entries({ ...bounds, fill: '#fff' })) paper.setAttribute(k, v);
       mask.append(paper, ...later.map((s) => copy(s, '#000')));
       defs.append(mask);
       const g = document.createElementNS(NS, 'g');
@@ -188,6 +239,13 @@
     built.strokesLayer.replaceChildren(...state.strokes.map(strokeElement));
   }
 
+  /** The picture's original square, for small previews. */
+  function squareCopy(svg) {
+    const c = svg.cloneNode(true);
+    c.setAttribute('viewBox', '0 0 400 400');
+    return c;
+  }
+
   const isEmpty = (state) => state.strokes.length === 0 && state.fills.every((f) => f === BLANK);
 
   /* ------------------------------------------------------------------ */
@@ -210,10 +268,13 @@
 
   async function exportPicture(page, svg) {
     const SIZE = 1200;
+    const [, , vbW, vbH] = svg.getAttribute('viewBox').split(' ').map(Number);
+    const W = SIZE;
+    const H = Math.round((SIZE * vbH) / vbW); // same shape as on screen
     const clone = svg.cloneNode(true);
     clone.setAttribute('xmlns', NS);
-    clone.setAttribute('width', SIZE);
-    clone.setAttribute('height', SIZE);
+    clone.setAttribute('width', W);
+    clone.setAttribute('height', H);
     // A picture rendered as an image can't see the page's fonts: embed ours.
     if (clone.querySelector('text')) {
       try {
@@ -233,11 +294,12 @@
         img.src = svgUrl;
       });
       const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = SIZE;
+      canvas.width = W;
+      canvas.height = H;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = BLANK;
-      ctx.fillRect(0, 0, SIZE, SIZE);
-      ctx.drawImage(img, 0, 0, SIZE, SIZE);
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       const name = `little-learners-${page.id}.png`;
       const file = new File([blob], name, { type: 'image/png' });
@@ -323,6 +385,8 @@
     const recentColors = () => (store.state.coloringRecent || []).map((h) => byHex.get(h)).filter(Boolean);
 
     let currentUndo = null; // undo for the open page (Ctrl/⌘+Z)
+    let pageObserver = null; // keeps the open picture fitted to the screen
+    api.onCleanup(() => pageObserver?.disconnect());
     const onKey = (e) => {
       if (currentUndo && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -382,6 +446,7 @@
     }
 
     function showGallery() {
+      pageObserver?.disconnect();
       currentUndo = null;
       fullscreenBtn = null;
       setImmersive(false);
@@ -412,12 +477,38 @@
       api.memory.pageId = page.id;
       setImmersive(true);
       if (canFullscreen() && (prefs.fullscreen ?? autoFullscreen())) enterFullscreen();
-      const built = buildPage(page);
-      const { svg, regions, strokesLayer } = built;
+      // The picture is rebuilt to the board's shape (see fitToBoard), so these change.
+      let tall = 1;
+      let built = buildPage(page, tall);
+      let { svg, regions, strokesLayer } = built;
       const state = loadState(page, built);
       applyState(built, state);
       const history = [];
       const save = () => saveState(page, state);
+
+      const nameBubble = el('div', { class: 'cs-name', 'aria-hidden': 'true' });
+      const board = el('div', { class: 'cs-board' }, svg, nameBubble);
+
+      // Fill the whole board: on a tall screen the paper gets taller too.
+      let refitAfterStroke = false;
+      function fitToBoard() {
+        const w = board.clientWidth;
+        const h = board.clientHeight;
+        if (!w || !h) return;
+        const want = Math.round(Math.max(1, h / w) * 100) / 100;
+        if (Math.abs(want - tall) < 0.015) return;
+        if (drawing) {
+          refitAfterStroke = true; // never swap the picture mid-stroke
+          return;
+        }
+        tall = want;
+        built = buildPage(page, tall);
+        ({ svg, regions, strokesLayer } = built);
+        applyState(built, state);
+        svg.querySelectorAll('.region').forEach((r) => (r.style.transition = 'none')); // no fade-in on rebuild
+        board.replaceChildren(svg, nameBubble);
+        requestAnimationFrame(() => svg.querySelectorAll('.region').forEach((r) => (r.style.transition = '')));
+      }
 
       /* ---------- Painting ---------- */
 
@@ -443,7 +534,7 @@
 
       let drawing = null; // { id, path, d, last }
 
-      svg.addEventListener('pointerdown', (e) => {
+      board.addEventListener('pointerdown', (e) => {
         sizePop.hidden = true;
         if (prefs.tool === 'fill') {
           const region = e.target.closest?.('.region');
@@ -452,7 +543,7 @@
         }
         if (drawing) return; // ignore a second finger while drawing
         e.preventDefault();
-        svg.setPointerCapture?.(e.pointerId);
+        board.setPointerCapture?.(e.pointerId);
         const p = toSvgPoint(e);
         const d = `M${p.x} ${p.y} l0.01 0`;
         const path = strokeElement({ c: prefs.color.hex, w: prefs.size.width, d });
@@ -460,7 +551,7 @@
         drawing = { id: e.pointerId, path, d, last: p };
       });
 
-      svg.addEventListener('pointermove', (e) => {
+      board.addEventListener('pointermove', (e) => {
         if (!drawing || e.pointerId !== drawing.id) return;
         const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
         for (const ev of events.length ? events : [e]) {
@@ -479,9 +570,13 @@
         drawing = null;
         noteRecent();
         save();
+        if (refitAfterStroke) {
+          refitAfterStroke = false;
+          fitToBoard();
+        }
       };
-      svg.addEventListener('pointerup', endStroke);
-      svg.addEventListener('pointercancel', endStroke);
+      board.addEventListener('pointerup', endStroke);
+      board.addEventListener('pointercancel', endStroke);
 
       /* ---------- Undo / clear / done ---------- */
 
@@ -555,7 +650,7 @@
           el(
             'div',
             { class: 'end-card', role: 'dialog', 'aria-label': 'Picture finished' },
-            el('div', { class: 'cs-preview' }, svg.cloneNode(true)),
+            el('div', { class: 'cs-preview' }, squareCopy(svg)),
             el('h2', null, praise),
             earned ? el('p', { class: 'end-best' }, '⭐ You earned a star!') : null,
             !enough ? el('p', { class: 'end-detail' }, 'Color more of the picture to earn a star.') : null,
@@ -754,8 +849,6 @@
         board.classList.toggle('crayon-mode', prefs.tool === 'crayon');
       }
 
-      const nameBubble = el('div', { class: 'cs-name', 'aria-hidden': 'true' });
-      const board = el('div', { class: 'cs-board' }, svg, nameBubble);
       const studio = el(
         'div',
         { class: 'cs-studio' },
@@ -768,6 +861,9 @@
         if (!sizePop.hidden && !modes.contains(e.target)) sizePop.hidden = true;
       });
       api.stage.replaceChildren(studio);
+      fitToBoard();
+      pageObserver = new ResizeObserver(fitToBoard); // rotation, full screen, browser bars
+      pageObserver.observe(board);
       paintControls();
       paintRecent();
       paintFullscreenBtn();

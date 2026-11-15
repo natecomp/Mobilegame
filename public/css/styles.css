@@ -698,8 +698,7 @@ a { color: inherit; text-decoration: none; }
   container-type: size;
 }
 .cs-board {
-  width: min(100%, calc(100dvh - 200px)); /* fallback without container units */
-  width: min(100cqw, 100cqh);
+  width: min(100%, calc(100dvh - 200px)); /* fallback without container units: square */
   aspect-ratio: 1;
   border-radius: var(--radius);
   overflow: hidden;
@@ -708,6 +707,11 @@ a { color: inherit; text-decoration: none; }
   border: 4px solid #fff;
   touch-action: none; /* drawing must not scroll or zoom the page */
   position: relative;
+}
+/* With container units the paper fills the whole space top to bottom
+   (never wider than tall); the picture is rebuilt to match its shape. */
+@supports (width: 1cqw) {
+  .cs-board { width: min(100cqw, 100cqh); height: 100cqh; aspect-ratio: auto; }
 }
 .cs-board.crayon-mode { cursor: crosshair; }
 .coloring-svg { display: block; width: 100%; height: 100%; }
