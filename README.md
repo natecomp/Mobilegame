@@ -32,6 +32,16 @@ npm install          # once: installs wrangler (Cloudflare's CLI)
 npm run dev          # http://localhost:8787, with the same headers as production
 ```
 
+## Deploy to GitHub Pages (no extra accounts)
+
+`.github/workflows/pages.yml` publishes `public/` to **https://natecomp.github.io/Mobilegame/** on every push to `main`. You can also run it by hand from the **Actions** tab.
+
+One-time setup:
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. GitHub Pages on a **private** repo needs a paid plan (Pro, Team or Enterprise). On the free plan, the repo must be public.
+
+The app uses relative paths, so it works from the `/Mobilegame/` sub-folder, including installing and offline play. `_headers` is a Cloudflare-only file, so Pages ignores it and the extra security headers aren't applied there.
+
 ## Deploy to Cloudflare
 
 The repo is ready for **Cloudflare Workers static assets** (`wrangler.jsonc`), which Cloudflare recommends for new sites. There's no server code: Cloudflare serves the files in `public/`.
