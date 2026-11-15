@@ -34,7 +34,7 @@ npm run dev          # http://localhost:8787, with the same headers as productio
 
 ## Deploy to GitHub Pages (no extra accounts)
 
-`.github/workflows/pages.yml` publishes `public/` to **https://natecomp.github.io/Mobilegame/** on every push to `main`. You can also run it by hand from the **Actions** tab.
+`.github/workflows/pages.yml` publishes `public/` to **https://natecomp.github.io/Mobilegame/** on every push to the repo's default branch. You can also run it by hand from the **Actions** tab.
 
 One-time setup:
 1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
